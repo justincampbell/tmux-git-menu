@@ -4,6 +4,8 @@ A quick-actions git menu for tmux, bound to a single key. Opens a popup with the
 
 The menu header shows the current branch, ahead/behind counts vs. upstream, and changed/untracked line counts.
 
+![Screenshot of the tmux-git-menu popup](screenshot.png)
+
 ## Requirements
 
 - `tmux` 3.2+ (for `display-popup` and `display-menu`)
