@@ -65,20 +65,55 @@ run_in_popup() {
 }
 
 show_menu() {
+    # Status file drives a small loading popup that re-renders as steps run.
+    local status_file
+    status_file=$(mktemp -t tmux-git-menu-status.XXXXXX)
+    echo "Checking branch..." > "$status_file"
+
+    # Mirror the user's menu theme on the popup, if set.
+    local border_lines border_style style
+    border_lines=$(tmux show-options -gqv menu-border-lines)
+    border_style=$(tmux show-options -gqv menu-border-style)
+    style=$(tmux show-options -gqv menu-style)
+    local popup_flags=(-E -w 36 -h 3)
+    [ -n "$border_lines" ] && popup_flags+=(-b "$border_lines")
+    [ -n "$border_style" ] && popup_flags+=(-S "$border_style")
+    [ -n "$style" ] && popup_flags+=(-s "$style")
+
+    tmux display-popup "${popup_flags[@]}" \
+        "printf '\e[?25l'
+         while :; do
+             msg=\$(cat '$status_file' 2>/dev/null)
+             [ \"\$msg\" = '__DONE__' ] && break
+             printf '\r\e[K  %s' \"\$msg\"
+             sleep 0.1
+         done
+         printf '\e[?25h'" &
+    local popup_pid=$!
+
     local branch default starting_choice
     branch=$(git -C "$(pane_path)" branch --show-current 2>/dev/null || true)
+    echo "Finding default branch..." > "$status_file"
     default=$(default_branch)
     local header_args=()
     starting_choice=0
     if [ -n "$branch" ]; then
         local position changes
+        echo "Checking ahead/behind..." > "$status_file"
         position=$(branch_position)
+        echo "Scanning changes..." > "$status_file"
         changes=$(git_changes)
         header_args+=("-#[align=centre,fg=cyan]$branch#[fg=default]$position" "" "")
         [ -n "$changes" ] && header_args+=("-#[align=centre]$changes" "" "")
         header_args+=("" "" "")
         starting_choice=$(( ${#header_args[@]} / 3 ))
     fi
+
+    # Signal the loading popup to close, then show the real menu.
+    echo "__DONE__" > "$status_file"
+    wait "$popup_pid" 2>/dev/null || true
+    rm -f "$status_file"
+
     tmux display-menu \
         -T "#[align=centre] git " \
         -C "$starting_choice" \
